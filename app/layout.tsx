@@ -18,9 +18,8 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "ImageCraft Pro",
-  description: "Professional Image Editor",
-  generator: "v0.app",
+  title: "Image Coordinate Viewer",
+  description: "Select multiple rectangles in an image and get the coordinates of each rectangle.",
 }
 
 export default function RootLayout({
