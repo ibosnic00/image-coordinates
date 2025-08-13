@@ -290,15 +290,9 @@ export default function ImageEditor() {
 
     if (isPositioningCrop) return;
 
-    // Check if clicking on a resize handle of an editing rectangle
-    const editingRectangle = rectangles.find((r) => r.isEditing);
-    if (editingRectangle) {
-      const handle = getResizeHandle(editingRectangle, coords);
-      if (handle) {
-        setResizeHandle(handle);
-        setDragStart(coords);
-        return;
-      }
+    // If we're editing a rectangle, don't handle clicks for drawing
+    if (editingRect) {
+      return;
     }
 
     if (isDrawing && currentRect) {
@@ -624,23 +618,45 @@ export default function ImageEditor() {
         return;
       }
 
-      // Handle rectangle editing
+      // Handle rectangle editing - check for resize handles first
       if (editingRect) {
-        // ... existing editing code ...
+        const editingRectangle = rectangles.find((r) => r.id === editingRect);
+        if (editingRectangle) {
+          const handle = getResizeHandle(editingRectangle, coords);
+          if (handle) {
+            setResizeHandle(handle);
+            setDragStart(coords);
+            return;
+          }
+        }
+        // If editing but not on a handle, don't start drawing
         return;
       }
 
-      // Check if clicking on resize handles
+      // Check if clicking on resize handles of any rectangle
       for (const rect of rectangles) {
         const handle = getResizeHandle(rect, coords);
         if (handle) {
           setResizeHandle(handle);
+          setEditingRect(rect.id);
           setDragStart(coords);
           return;
         }
       }
-      // If not clicking on a handle, don't start drawing
-      return;
+
+      // If not editing and not on a handle, start drawing
+      if (!isDrawing && !currentRect) {
+        setIsDrawing(true);
+        setDrawStart(coords);
+        setCurrentRect({
+          id: Date.now().toString(),
+          x: coords.x,
+          y: coords.y,
+          width: 0,
+          height: 0,
+          isEditing: false,
+        });
+      }
     },
     [
       isCtrlPressed,
@@ -651,6 +667,9 @@ export default function ImageEditor() {
       cropPan,
       pan,
       rectangles,
+      editingRect,
+      isDrawing,
+      currentRect,
     ]
   );
 
@@ -668,7 +687,15 @@ export default function ImageEditor() {
         isEditing: rect.id === id ? !rect.isEditing : false,
       }))
     );
-    setEditingRect((prev) => (prev === id ? null : id));
+    
+    // Set editing state
+    if (editingRect === id) {
+      setEditingRect(null);
+      setResizeHandle(null);
+    } else {
+      setEditingRect(id);
+      setResizeHandle(null);
+    }
   };
 
   const handleZoomIn = () => {
@@ -767,7 +794,10 @@ export default function ImageEditor() {
     e.stopPropagation(); // Prevent image click when interacting with corners
     setResizeHandle(corner);
     setEditingRect(rectId);
-    setDragStart({ x: e.clientX, y: e.clientY });
+    
+    // Convert screen coordinates to image coordinates for proper dragging
+    const coords = getImageCoordinates(e as React.MouseEvent<HTMLImageElement>);
+    setDragStart(coords);
   };
 
   const confirmCrop = useCallback(() => {
@@ -1211,11 +1241,22 @@ export default function ImageEditor() {
           {/* Rectangle List */}
           <div className="lg:col-span-1">
             <div className="editor-card rounded-lg">
-              <div className="border-b border-zinc-700 p-4">
-                <h2 className="text-lg font-semibold text-white">
-                  Selections ({rectangles.length})
-                </h2>
-              </div>
+                             <div className="border-b border-zinc-700 p-4">
+                 <div className="flex items-center justify-between">
+                   <h2 className="text-lg font-semibold text-white">
+                     Selections ({rectangles.length})
+                   </h2>
+                   {rectangles.length > 0 && (
+                     <button
+                       onClick={() => setRectangles([])}
+                       className="p-2 rounded-md hover:bg-red-600/20 hover:text-red-400 transition-colors"
+                       title="Delete all selections"
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                   )}
+                 </div>
+               </div>
               <div className="p-4">
                                                                    <div 
                                     className="space-y-3 max-h-156 overflow-y-auto custom-scrollbar"
