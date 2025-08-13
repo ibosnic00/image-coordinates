@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Trash2, Edit3, ZoomIn, ZoomOut, RotateCcw, Crop } from "lucide-react";
+import { Trash2, Edit3, ZoomIn, ZoomOut, RotateCcw, Crop, Maximize2 } from "lucide-react";
 
 interface Rectangle {
   id: string;
@@ -43,6 +43,7 @@ export default function ImageEditor() {
   const [editingRect, setEditingRect] = useState<string | null>(null);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [showResizeDialog, setShowResizeDialog] = useState(false);
+  const [showScaleDialog, setShowScaleDialog] = useState(false);
   const [cropPosition, setCropPosition] = useState({ x: 0.25, y: 0.25 }); // Center crop by default
   const [isPositioningCrop, setIsPositioningCrop] = useState(false);
   const [pendingResize, setPendingResize] = useState<{
@@ -204,6 +205,58 @@ export default function ImageEditor() {
     setPendingResize(null);
     setIsDraggingCrop(false);
     setCropResizeHandle(null);
+  };
+
+  const handleScaleImage = (targetWidth: number, targetHeight: number) => {
+    if (!image) return;
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      // Draw the image at the new size
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+      const scaledImageUrl = canvas.toDataURL();
+      setImage(scaledImageUrl);
+      
+      // Calculate scale factors
+      const scaleX = targetWidth / originalImageSize.width;
+      const scaleY = targetHeight / originalImageSize.height;
+      
+      // Update original image size
+      setOriginalImageSize({
+        width: targetWidth,
+        height: targetHeight,
+      });
+
+      // Scale all existing rectangles proportionally
+      setRectangles(prev => prev.map(rect => ({
+        ...rect,
+        x: rect.x * scaleX,
+        y: rect.y * scaleY,
+        width: rect.width * scaleX,
+        height: rect.height * scaleY,
+      })));
+
+      // Reset zoom and pan
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+      
+      // Close the dialog
+      setShowScaleDialog(false);
+    };
+    
+    img.onerror = () => {
+      console.error("Failed to load image for scaling");
+    };
+    img.crossOrigin = "anonymous";
+    img.src = image;
   };
 
   const getImageCoordinates = (event: React.MouseEvent<HTMLImageElement>) => {
@@ -786,6 +839,199 @@ export default function ImageEditor() {
     setCropArea(cropAreaCalculation());
   }, [isPositioningCrop, cropPosition, cropSize]);
 
+  // Document-level mouse event listeners to handle mouse leaving image area during drag operations
+  useEffect(() => {
+    let isActuallyDragging = false;
+    
+    const handleDocumentMouseMove = (event: MouseEvent) => {
+      // Only handle if we're in the middle of a drag operation
+      if (!isDraggingCrop && !resizeHandle && !isDrawing) return;
+      
+      // Check if mouse is outside the image area
+      if (!imageRef.current) return;
+      const rect = imageRef.current.getBoundingClientRect();
+      const isOutsideImage = event.clientX < rect.left || event.clientX > rect.right || 
+                             event.clientY < rect.top || event.clientY > rect.bottom;
+      
+      // Only handle document-level events when mouse is outside image area
+      if (!isOutsideImage) return;
+      
+      // Mark that we're actually dragging (mouse moved)
+      isActuallyDragging = true;
+
+      // Convert screen coordinates to image coordinates
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      
+      // Clamp coordinates to image bounds
+      const clampedX = Math.max(0, Math.min(1, x));
+      const clampedY = Math.max(0, Math.min(1, y));
+      
+      const coords = { x: clampedX, y: clampedY };
+
+      // Handle crop dragging
+      if (isDraggingCrop && cropResizeHandle) {
+        const newCropSize = { ...cropSize };
+        const newCropPosition = { ...cropPosition };
+
+        switch (cropResizeHandle) {
+          case "nw":
+            newCropSize.width = cropPosition.x + cropSize.width - coords.x;
+            newCropSize.height = cropPosition.y + cropSize.height - coords.y;
+            newCropPosition.x = coords.x;
+            newCropPosition.y = coords.y;
+            break;
+          case "ne":
+            newCropSize.width = coords.x - cropPosition.x;
+            newCropSize.height = cropPosition.y + cropSize.height - coords.y;
+            newCropPosition.y = coords.y;
+            break;
+          case "sw":
+            newCropSize.width = cropPosition.x + cropSize.width - coords.x;
+            newCropSize.height = coords.y - cropPosition.y;
+            newCropPosition.x = coords.x;
+            break;
+          case "se":
+            newCropSize.width = coords.x - cropPosition.x;
+            newCropSize.height = coords.y - cropPosition.y;
+            break;
+        }
+
+        // Ensure minimum size and bounds
+        newCropSize.width = Math.max(
+          0.05,
+          Math.min(1 - newCropPosition.x, newCropSize.width)
+        );
+        newCropSize.height = Math.max(
+          0.05,
+          Math.min(1 - newCropPosition.y, newCropSize.height)
+        );
+        newCropPosition.x = Math.max(
+          0,
+          Math.min(1 - newCropSize.width, newCropPosition.x)
+        );
+        newCropPosition.y = Math.max(
+          0,
+          Math.min(1 - newCropPosition.y, newCropPosition.y)
+        );
+
+        setCropSize(newCropSize);
+        setCropPosition(newCropPosition);
+        return;
+      }
+
+      // Handle rectangle resizing
+      if (resizeHandle && editingRect) {
+        const rect = rectangles.find((r) => r.id === editingRect);
+        if (rect && dragStart) {
+          const deltaX = coords.x - dragStart.x;
+          const deltaY = coords.y - dragStart.y;
+
+          setRectangles((prev) =>
+            prev.map((r) => {
+              if (r.id === editingRect) {
+                const newRect = { ...r };
+
+                switch (resizeHandle) {
+                  case "nw":
+                    newRect.x += deltaX;
+                    newRect.y += deltaY;
+                    newRect.width -= deltaX;
+                    newRect.height -= deltaY;
+                    break;
+                  case "ne":
+                    newRect.y += deltaY;
+                    newRect.width += deltaX;
+                    newRect.height -= deltaY;
+                    break;
+                  case "sw":
+                    newRect.x += deltaX;
+                    newRect.width -= deltaX;
+                    newRect.height += deltaY;
+                    break;
+                  case "se":
+                    newRect.width += deltaX;
+                    newRect.height += deltaY;
+                    break;
+                }
+
+                newRect.width = Math.max(
+                  0.01,
+                  Math.min(1 - newRect.x, newRect.width)
+                );
+                newRect.height = Math.max(
+                  0.01,
+                  Math.min(1 - newRect.y, newRect.height)
+                );
+                newRect.x = Math.max(0, Math.min(1 - newRect.width, newRect.x));
+                newRect.y = Math.max(
+                  0,
+                  Math.min(1 - newRect.height, newRect.y)
+                );
+
+                return newRect;
+              }
+              return r;
+            })
+          );
+
+          setDragStart(coords);
+        }
+        return;
+      }
+
+      // Handle rectangle drawing
+      if (isDrawing && currentRect && drawStart) {
+        const width = coords.x - drawStart.x;
+        const height = coords.y - drawStart.y;
+
+        setCurrentRect({
+          ...currentRect,
+          x: Math.min(drawStart.x, coords.x),
+          y: Math.min(drawStart.y, coords.y),
+          width: Math.abs(width),
+          height: Math.abs(height),
+        });
+      }
+    };
+
+    const handleDocumentMouseUp = () => {
+      // Only reset drag states if we were actually dragging outside the image area
+      if (isActuallyDragging) {
+        setIsDraggingCrop(false);
+        setCropResizeHandle(null);
+        setResizeHandle(null);
+        setIsDrawing(false);
+        setCurrentRect(null);
+        setDrawStart(null);
+      }
+      // Reset the flag
+      isActuallyDragging = false;
+    };
+
+    // Add document-level event listeners
+    document.addEventListener('mousemove', handleDocumentMouseMove);
+    document.addEventListener('mouseup', handleDocumentMouseUp);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousemove', handleDocumentMouseMove);
+      document.removeEventListener('mouseup', handleDocumentMouseUp);
+    };
+  }, [
+    isDraggingCrop,
+    cropResizeHandle,
+    cropSize,
+    cropPosition,
+    resizeHandle,
+    editingRect,
+    rectangles,
+    dragStart,
+    isDrawing,
+    currentRect,
+    drawStart,
+  ]);
+
   const handleCornerMouseDown = (
     e: React.MouseEvent,
     rectId: string,
@@ -910,6 +1156,13 @@ export default function ImageEditor() {
                       >
                         <Crop className="w-4 h-4" />
                         Resize
+                      </button>
+                      <button
+                        onClick={() => setShowScaleDialog(true)}
+                        className="editor-button px-4 py-2 rounded-md font-medium flex items-center gap-2"
+                      >
+                        <Maximize2 className="w-4 h-4" />
+                        Scale
                       </button>
 
                       {isPositioningCrop && (
@@ -1050,6 +1303,7 @@ export default function ImageEditor() {
                               cursor: "move",
                             }}
                           />
+                          {/* Primary crop size display - positioned above crop area */}
                           <div
                             style={{
                               position: "absolute",
@@ -1066,6 +1320,33 @@ export default function ImageEditor() {
                             }}
                           >
                             Crop:{" "}
+                            {Math.round(
+                              cropArea.width * originalImageSize.width
+                            )}{" "}
+                            ×{" "}
+                            {Math.round(
+                              cropArea.height * originalImageSize.height
+                            )}
+                          </div>
+
+                          {/* Secondary crop size display - positioned in top-right corner for better visibility */}
+                          <div
+                            style={{
+                              position: "absolute",
+                              right: "10px",
+                              top: "10px",
+                              color: "#ff6b35",
+                              fontSize: "16px",
+                              fontWeight: "700",
+                              fontFamily: "var(--font-mono)",
+                              backgroundColor: "rgba(0, 0, 0, 0.9)",
+                              padding: "6px 12px",
+                              borderRadius: "6px",
+                              pointerEvents: "none",
+                              border: "1px solid rgba(255, 107, 53, 0.3)",
+                              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.5)",
+                            }}
+                          >
                             {Math.round(
                               cropArea.width * originalImageSize.width
                             )}{" "}
@@ -1360,6 +1641,67 @@ export default function ImageEditor() {
           </div>
         </div>
       </div>
+
+      {/* Scale Dialog */}
+      {showScaleDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold text-white mb-4">Scale Image</h3>
+            <p className="text-zinc-400 text-sm mb-4">
+              Current size: {originalImageSize.width} × {originalImageSize.height}
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  New Width
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  defaultValue={originalImageSize.width}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  id="scaleWidth"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  New Height
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  defaultValue={originalImageSize.height}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  id="scaleHeight"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  const width = parseInt((document.getElementById('scaleWidth') as HTMLInputElement).value);
+                  const height = parseInt((document.getElementById('scaleHeight') as HTMLInputElement).value);
+                  if (width > 0 && height > 0) {
+                    handleScaleImage(width, height);
+                  }
+                }}
+                className="editor-button active px-4 py-2 rounded"
+              >
+                Scale
+              </button>
+              <button
+                onClick={() => setShowScaleDialog(false)}
+                className="editor-button px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <input
         ref={fileInputRef}
