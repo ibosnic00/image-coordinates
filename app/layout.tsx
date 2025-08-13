@@ -21,6 +21,14 @@ export const metadata: Metadata = {
   title: "Coordinate Extractor",
   description: "Extract coordinates for multiple selected rectangles from images",
   generator: "v0.app",
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico' }
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
