@@ -18,8 +18,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ImageCraft Pro",
-  description: "Professional Image Editor",
+  title: "Coordinate Extractor",
+  description: "Extract coordinates for multiple selected rectangles from images",
   generator: "v0.app",
 };
 

@@ -834,10 +834,10 @@ export default function ImageEditor() {
         {/* Header */}
         <div className="mb-6 border-b border-zinc-800 pb-4">
           <h1 className="text-2xl font-semibold text-white mb-1">
-            ImageCraft Pro
+            Coordinate Extractor
           </h1>
           <p className="text-zinc-400 text-sm">
-            Professional image editing and selection tool
+            Extract coordinates for multiple selected rectangles from images
           </p>
         </div>
 
