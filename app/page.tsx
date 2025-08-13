@@ -1215,45 +1215,59 @@ export default function ImageEditor() {
                     rectangles.map((rect, index) => (
                       <div
                         key={rect.id}
-                        className={`p-3 border rounded-lg transition-all cursor-pointer ${
+                        className={`p-3 border-2 rounded-lg transition-all duration-200 cursor-pointer ${
                           hoveredRect === rect.id
-                            ? "bg-zinc-800 border-orange-500/50"
+                            ? "bg-blue-500/95 border-blue-400 shadow-lg shadow-blue-500/25 scale-[1.02]"
                             : "bg-zinc-800/50 border-zinc-600"
                         } ${
                           rect.isEditing
-                            ? "ring-1 ring-emerald-500 bg-emerald-900/10"
+                            ? "ring-2 ring-emerald-500 bg-emerald-900/10"
                             : ""
                         }`}
                         onMouseEnter={() => setHoveredRect(rect.id)}
                         onMouseLeave={() => setHoveredRect(null)}
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-white">
+                          <span className={`text-sm font-medium ${
+                            hoveredRect === rect.id ? "text-blue-100" : "text-white"
+                          }`}>
                             #{index + 1}
                           </span>
                           <div className="flex gap-1">
                             <button
                               onClick={() => toggleEditRectangle(rect.id)}
-                              className={`p-1 rounded text-xs ${
+                              className={`p-1 rounded text-xs transition-colors ${
                                 rect.isEditing
                                   ? "bg-emerald-600 text-white"
-                                  : "editor-button"
+                                  : hoveredRect === rect.id 
+                                    ? "bg-blue-600 text-white hover:bg-blue-700" 
+                                    : "editor-button"
                               }`}
                             >
                               <Edit3 className="w-3 h-3" />
                             </button>
                             <button
                               onClick={() => deleteRectangle(rect.id)}
-                              className="editor-button p-1 rounded text-xs hover:bg-red-600 hover:border-red-500"
+                              className={`p-1 rounded text-xs transition-colors ${
+                                hoveredRect === rect.id 
+                                  ? "bg-red-600 text-white hover:bg-red-700" 
+                                  : "editor-button hover:bg-red-600 hover:border-red-500"
+                              }`}
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
 
-                        <div className="text-xs text-zinc-400 space-y-1 font-mono">
-                          <div className="bg-zinc-900 p-2 rounded">
-                            <div className="text-zinc-300 mb-1">
+                        <div className={`text-xs space-y-1 font-mono ${
+                          hoveredRect === rect.id ? "text-white" : "text-zinc-400"
+                        }`}>
+                          <div className={`p-2 rounded ${
+                            hoveredRect === rect.id ? "bg-blue-600/30" : "bg-zinc-900"
+                          }`}>
+                            <div className={`mb-1 ${
+                              hoveredRect === rect.id ? "text-blue-100" : "text-zinc-300"
+                            }`}>
                               Coordinates:
                             </div>
                             <div>
@@ -1273,7 +1287,9 @@ export default function ImageEditor() {
                               )}
                               )
                             </div>
-                            <div className="text-orange-400 mt-1">
+                            <div className={`mt-1 ${
+                              hoveredRect === rect.id ? "text-yellow-300" : "text-yellow-400"
+                            }`}>
                               {Math.round(rect.width * originalImageSize.width)}{" "}
                               ×{" "}
                               {Math.round(
@@ -1282,7 +1298,11 @@ export default function ImageEditor() {
                             </div>
                           </div>
                           {rect.isEditing && (
-                            <div className="text-emerald-400 text-center py-1 bg-emerald-900/20 rounded text-xs">
+                            <div className={`text-center py-1 rounded text-xs ${
+                              hoveredRect === rect.id 
+                                ? "text-emerald-200 bg-emerald-700/40" 
+                                : "text-emerald-400 bg-emerald-900/20"
+                            }`}>
                               Editing - drag corners
                             </div>
                           )}
